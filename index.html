@@ -139,8 +139,8 @@ tbody.apt tr.city td{background:#EEF0F3;color:#3C4149;border-bottom-color:#DDE1E
 
 <script>
 // ======== CONFIGURACIÓN: pega aquí tus datos ========
-const API_URL   = 'https://script.google.com/macros/s/AKfycbzT-F_7pGQxXuNCU4r9hu6XUrgLdWF3Pxqxp_yncnBeOtwdyzXbykmy4Dj-XxzS42uW/exec';
-const CLIENT_ID = '64895898181-d1p65o4t2r8e8um0iigtagqnh037upt9.apps.googleusercontent.com';
+const API_URL   = 'https://script.google.com/macros/s/AKfycbzT-F_7pGQxXuNCU4r9hu6XUrgLdWF3Pxqxp_yncnBeOtwdyzXbykmy4Dj-XxzS42uW/exec';                 // termina en /exec
+const CLIENT_ID = '64895898181-d1p65o4t2r8e8um0iigtagqnh037upt9.apps.googleusercontent.com';  // el mismo que en Código.gs
 const DOMINIO   = 'textilon.com';
 // ====================================================
 </script>
@@ -184,13 +184,28 @@ const DOMINIO   = 'textilon.com';
     const llamar = (accion, codigo) => {
       const ir = () => fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ token: token, accion: accion, codigo: codigo }) })
-        .then(r => r.json())
+        .then(async resp => {
+          const t = await resp.text();
+          try { return JSON.parse(t); }
+          catch (e) {
+            const txt = t.replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+            throw new Error('El servidor respondió algo inesperado (HTTP ' + resp.status + '): ' + txt);
+          }
+        })
         .then(r => {
           if (r.ok) return ok(r.data);
-          if (r.auth) { pendiente = ir; mostrarLogin('Tu sesión venció. Vuelve a iniciar sesión.'); return; }
-          ko(new Error(r.error || 'Error del servidor'));
+          if (r.auth) { pendiente = ir; mostrarLogin(r.error || 'Tu sesión venció. Vuelve a iniciar sesión.'); return; }
+          ko(new Error('Error del servidor: ' + (r.error || 'desconocido')));
         })
-        .catch(() => ko(new Error('No hay conexión con el servidor de stock. Revisa tu internet e inténtalo de nuevo.')));
+        .catch(err => {
+          const m = String(err && err.message || err);
+          ko(new Error(m.indexOf('El servidor') === 0 ? m
+            : 'No hay conexión con el servidor de stock (' + m + '). Revisa que API_URL sea la URL /exec correcta y que la implementación tenga acceso "Cualquier persona".'));
+        });
+      if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(API_URL)) {
+        ko(new Error('API_URL está mal escrita. Debe ser https://script.google.com/macros/s/…/exec (ahora dice: ' + API_URL + ')'));
+        return;
+      }
       if (!tokenVigente(token)) { pendiente = ir; mostrarLogin(); return; }
       ir();
     };
