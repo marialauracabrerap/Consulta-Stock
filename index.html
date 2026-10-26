@@ -38,7 +38,7 @@ button:focus-visible{outline:3px solid var(--red-soft);outline-offset:2px}
 .result{margin-top:26px}
 .sec{display:flex;align-items:center;gap:10px;border-bottom:2px solid var(--red);padding-bottom:8px;margin:22px 0 14px}
 .sec h2{margin:0;font-size:1.15rem;font-weight:700}
-.pill{background:var(--red);color:#fff;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:6px}
+.pill{white-space:nowrap;background:var(--red);color:#fff;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 10px;border-radius:6px}
 .pill.gray{background:var(--gray)}
 .prod{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
 .code{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
@@ -93,11 +93,32 @@ tbody.apt tr.city td{background:#EEF0F3;color:#3C4149;border-bottom-color:#DDE1E
 .prod .desc{font-size:1.35rem;font-weight:700}
 .datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:12px 18px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .dl{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.dv{font-weight:600;margin-top:2px;word-break:break-word}
+.dv{font-weight:600;margin-top:2px;overflow-wrap:anywhere}
 table.stock{min-width:0;max-width:640px;font-size:.95rem}
 table.stock td{padding:10px 18px}
 table.stock thead th{padding:10px 18px}
 .box:has(table.stock){max-width:640px}
+.res{display:grid;grid-template-columns:1fr;gap:0 24px}
+.res .sec{margin-top:22px}
+.cards{display:grid;grid-template-columns:repeat(var(--n,1),minmax(0,1fr));gap:14px;align-items:start}
+.colc{display:flex;flex-direction:column;gap:14px}
+.cc{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.ch{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:var(--red-soft);border-bottom:2px solid var(--red)}
+.cn{font-weight:700;color:var(--red-dark);font-size:1rem}
+.cs{font-size:.78rem;color:var(--muted);margin-left:8px}
+.ct{font-weight:700;color:var(--red-dark);font-size:1.1rem}
+.cc.alm .ch{background:#EEF0F3;border-bottom-color:#5B6370}
+.cc.alm .cn,.cc.alm .ct{color:#3C4149}
+.cc table{width:100%;min-width:0;border-collapse:collapse;font-size:.92rem}
+.cc td{padding:7px 16px;border-bottom:1px solid var(--line)}
+.cc tr:last-child td{border-bottom:0}
+@media (min-width:1100px){
+  .res{grid-template-columns:340px minmax(0,1fr)}
+  .res .datos{grid-template-columns:1fr 1fr}
+  .res .dato.ancho{grid-column:1/-1}
+  .wrap{padding-top:18px}
+  .result{margin-top:4px}
+}
 </style>
 </head>
 <body>
@@ -271,39 +292,46 @@ const DOMINIO   = 'textilon.com';
     const pill = r.tiendasConStock
       ? `<span class="pill">Disponible en ${r.tiendasConStock} ${r.tiendasConStock === 1 ? 'tienda' : 'tiendas'}</span>`
       : `<span class="pill gray">Sin stock en tiendas</span>`;
-    const dato = (l, v) => `<div class="dato"><div class="dl">${l}</div><div class="dv">${esc(v || '—')}</div></div>`;
+    const dato = (l, v, c) => `<div class="dato ${c || ''}"><div class="dl">${l}</div><div class="dv">${esc(v || '—')}</div></div>`;
     const fila = f => `<tr><td class="store">${esc(f.tienda)}</td><td class="num ${f.cantidad <= 2 ? 'low' : ''}">${fmt(f.cantidad)}</td></tr>`;
-    const cuerpo = r.ciudades.map(g => `
-      <tbody>
-        <tr class="city"><td>${esc(g.ciudad)} <span>${g.filas.length} ${g.filas.length === 1 ? 'tienda' : 'tiendas'}</span></td><td class="num">${fmt(g.total)}</td></tr>
-        ${g.filas.map(fila).join('')}
-      </tbody>`).join('') + (apt.filas.length ? `
-      <tbody class="apt">
-        <tr class="city"><td>Almacén <span>no suma al stock en tiendas</span></td><td class="num">${fmt(apt.total)}</td></tr>
-        ${apt.filas.map(fila).join('')}
-      </tbody>` : '');
+    const tarjeta = (titulo, sub, total, filas, cls) => `
+      <div class="cc ${cls || ''}">
+        <div class="ch"><div><span class="cn">${esc(titulo)}</span><span class="cs">${sub}</span></div><span class="ct">${fmt(total)}</span></div>
+        <table><tbody>${filas.map(fila).join('')}</tbody></table>
+      </div>`;
+    // Tarjetas por ciudad repartidas en columnas parejas (según el ancho de la pantalla)
+    const items = r.ciudades.map(g => ({ alto: g.filas.length + 1.4,
+      html: tarjeta(g.ciudad, g.filas.length + (g.filas.length === 1 ? ' tienda' : ' tiendas'), g.total, g.filas) }));
+    if (apt.filas.length) items.push({ alto: apt.filas.length + 1.4, html: tarjeta('Almacén', 'no suma a tiendas', apt.total, apt.filas, 'alm') });
+    const nCol = Math.min(items.length || 1, window.innerWidth >= 980 ? 3 : window.innerWidth >= 600 ? 2 : 1);
+    const cols = Array.from({ length: nCol }, () => ({ alto: 0, html: '' }));
+    items.forEach(it => { const c = cols.reduce((a, b) => (b.alto < a.alto ? b : a)); c.alto += it.alto; c.html += it.html; });
+    const cuerpo = cols.map(c => `<div class="colc">${c.html}</div>`).join('');
     $('result').innerHTML = `
-      <div class="sec"><h2>Producto</h2>${pill}</div>
-      <div class="prod">
-        <div class="desc">${esc(p.descripcion || 'Sin descripción')}</div>
-        <div class="datos">
-          ${dato('Estilo', p.estilo)}${dato('Código de barras', p.codigo || r.codigo)}${dato('Talla', p.talla)}
-          ${dato('Color', p.color)}${dato('Departamento', p.departamento)}${dato('Temporada', p.temporada)}
+      <div class="res">
+        <div class="col-prod">
+          <div class="sec"><h2>Producto</h2>${pill}</div>
+          <div class="prod">
+            <div class="desc">${esc(p.descripcion || 'Sin descripción')}</div>
+            <div class="datos">
+              ${dato('Código de barras', p.codigo || r.codigo, 'ancho')}${dato('Estilo', p.estilo)}${dato('Talla', p.talla)}
+              ${dato('Color', p.color)}${dato('Departamento', p.departamento)}${dato('Temporada', p.temporada)}
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><div class="kl">Stock en tiendas</div><div class="kv">${fmt(r.total)}</div><div class="ks">unidades</div></div>
-        <div class="kpi"><div class="kl">Tiendas con stock</div><div class="kv">${r.tiendasConStock}<small> / ${r.tiendasTotal}</small></div><div class="ks">${r.ciudades.map(g => g.ciudad).join(', ') || 'ninguna ciudad'}</div></div>
-        <div class="kpi apt ${apt.total ? '' : 'mute'}"><div class="kl">Almacén (APT)</div><div class="kv">${fmt(apt.total)}</div><div class="ks">${apt.total ? 'unidades disponibles para reponer' : 'sin stock en almacén'}</div></div>
-      </div>
-      <div class="sec"><h2>Stock por tienda</h2></div>
-      ${r.ciudades.length || apt.filas.length ? `
-      <div class="box"><table class="stock">
-        <thead><tr><th>Tienda</th><th class="num">Cantidad</th></tr></thead>
-        ${cuerpo}
-        <tfoot><tr><td>Total en tiendas</td><td class="num">${fmt(r.total)}</td></tr>${apt.total ? `<tr><td>Total en almacén (APT)</td><td class="num">${fmt(apt.total)}</td></tr>` : ''}</tfoot>
-      </table></div>` : `<div class="box"><p class="none">No hay stock de este producto en tiendas ni en almacén.</p></div>`}`;
+        <div class="col-stock">
+          <div class="sec"><h2>Stock por tienda</h2></div>
+          ${items.length ? `<div class="cards" style="--n:${nCol}">${cuerpo}</div>`
+            : `<div class="box"><p class="none">No hay stock de este producto en tiendas ni en almacén.</p></div>`}
+        </div>
+      </div>`;
   }
+  let anchoPrevio = window.innerWidth;
+  window.addEventListener('resize', () => {
+    const w = window.innerWidth;
+    if (last && last.encontrado && ((w >= 980) !== (anchoPrevio >= 980) || (w >= 600) !== (anchoPrevio >= 600))) render();
+    anchoPrevio = w;
+  });
 
   function renderHistory(){
     $('historyBox').hidden = !history.length;
